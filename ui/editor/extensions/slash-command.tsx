@@ -1,34 +1,34 @@
-import React, {
-  useState,
-  useEffect,
-  useCallback,
-  ReactNode,
-  useRef,
-  useLayoutEffect,
-} from "react";
-import { Editor, Range, Extension } from "@tiptap/core";
-import Suggestion from "@tiptap/suggestion";
+import { handleImageUpload } from "@/lib/editor";
+import LoadingCircle from "@/ui/shared/loading-circle";
+import Magic from "@/ui/shared/magic";
+import { Editor, Extension, Range } from "@tiptap/core";
 import { ReactRenderer } from "@tiptap/react";
+import Suggestion from "@tiptap/suggestion";
+import va from "@vercel/analytics";
 import { useCompletion } from "ai/react";
-import tippy from "tippy.js";
 import {
+  CheckSquare,
+  Code,
   Heading1,
   Heading2,
   Heading3,
+  Image as ImageIcon,
   List,
   ListOrdered,
   MessageSquarePlus,
   Text,
   TextQuote,
-  Image as ImageIcon,
-  Code,
-  CheckSquare,
 } from "lucide-react";
-import LoadingCircle from "@/ui/shared/loading-circle";
+import {
+  ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
-import va from "@vercel/analytics";
-import Magic from "@/ui/shared/magic";
-import { handleImageUpload } from "@/lib/editor";
+import tippy from "tippy.js";
 
 interface CommandItemProps {
   title: string;
@@ -266,10 +266,26 @@ const CommandList = ({
       editor.chain().focus().deleteRange(range).run();
     },
     onFinish: (_prompt, completion) => {
+      if (!editor) return;
+      const from = editor.state.selection.from - completion.length;
+      const to = editor.state.selection.from;
+      const text = editor.state.doc.textBetween(from, to);
+      // Split the text into paragraphs
+      const paragraphs = text
+        .split("\n\n")
+        .filter((paragraph) => paragraph.length > 0);
+
+      // Map each paragraph to an object representing a paragraph node
+      const content = paragraphs.map((paragraph) => ({
+        type: "paragraph",
+        content: [{ type: "text", text: paragraph }],
+      }));
+      editor?.chain().deleteRange({ from, to }).insertContent(content).run();
+
       // highlight the generated text
-      editor.commands.setTextSelection({
-        from: range.from,
-        to: range.from + completion.length,
+      editor?.commands.setTextSelection({
+        from: editor.state.selection.from - completion.length,
+        to: editor.state.selection.from,
       });
     },
     onError: () => {

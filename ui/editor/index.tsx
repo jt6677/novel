@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useEditor, EditorContent } from "@tiptap/react";
-import { TiptapEditorProps } from "./props";
-import { TiptapExtensions } from "./extensions";
 import useLocalStorage from "@/lib/hooks/use-local-storage";
-import { useDebouncedCallback } from "use-debounce";
-import { useCompletion } from "ai/react";
-import { toast } from "sonner";
+import { EditorContent, useEditor } from "@tiptap/react";
 import va from "@vercel/analytics";
+import { useCompletion } from "ai/react";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { useDebouncedCallback } from "use-debounce";
 import DEFAULT_EDITOR_CONTENT from "./default-content";
+import { TiptapExtensions } from "./extensions";
+import { TiptapEditorProps } from "./props";
 
 import { EditorBubbleMenu } from "./components";
 
@@ -43,6 +43,14 @@ export default function Editor() {
         selection.from,
         "\n",
       );
+      const lastOne = e.editor.state.doc.textBetween(
+        selection.from - 1,
+        selection.from,
+        "\n",
+      );
+      if (lastOne === "/") {
+        return;
+      }
       if (lastTwo === "++" && !isLoading) {
         e.editor.commands.deleteRange({
           from: selection.from - 2,
@@ -70,6 +78,23 @@ export default function Editor() {
       }
     },
     onFinish: (_prompt, completion) => {
+      if (!editor) return;
+      const from = editor.state.selection.from - completion.length;
+      const to = editor.state.selection.from;
+      const text = editor.state.doc.textBetween(from, to);
+      // Split the text into paragraphs
+      const paragraphs = text
+        .split("\n\n")
+        .filter((paragraph) => paragraph.length > 0);
+
+      // Map each paragraph to an object representing a paragraph node
+      const content = paragraphs.map((paragraph) => ({
+        type: "paragraph",
+        content: [{ type: "text", text: paragraph }],
+      }));
+      editor?.chain().deleteRange({ from, to }).insertContent(content).run();
+
+      // highlight the generated text
       editor?.commands.setTextSelection({
         from: editor.state.selection.from - completion.length,
         to: editor.state.selection.from,
